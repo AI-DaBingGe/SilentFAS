@@ -48,8 +48,8 @@ if __name__ == "__main__":
     # Wait for server to be up
     time.sleep(2)
     
-    real_img = "./images/sample/image_T1.jpg"
-    fake_img = "./images/sample/image_F1.jpg"
+    real_img = "./sample_images/real.png"
+    fake_img = "./sample_images/fake.png"
     
     all_passed = True
     all_passed &= test_image(real_img, expected_real=True)

@@ -8,3 +8,5 @@ Pillow
 fastapi
 uvicorn
 python-multipart
+onnx
+onnxruntime

@@ -58,6 +58,8 @@ async def check_liveness(request: LivenessRequest):
             
             # 遍历所有模型进行 Ensemble(集成推理)
             for model_name in os.listdir(MODEL_DIR):
+                if not model_name.endswith('.onnx'):
+                    continue
                 h_input, w_input, model_type, scale = parse_model_name(model_name)
                 param = {
                     "org_img": image,
@@ -77,7 +79,9 @@ async def check_liveness(request: LivenessRequest):
             # 预测结果: 0 和 2 代表 Fake（不同维度的攻击如纸张翻拍或屏幕翻拍），1 代表 Real
             label = np.argmax(prediction)
             # 因为有多个模型进行ensemble，所以 / num_models 取平均置信度
-            num_models = len(os.listdir(MODEL_DIR))
+            num_models = len([m for m in os.listdir(MODEL_DIR) if m.endswith('.onnx')])
+            if num_models == 0:
+                raise Exception("未找到 ONNX 模型，请确保预训练模型已成功转换。")
             value = prediction[0][label] / num_models 
             
             is_real = True if label == 1 else False

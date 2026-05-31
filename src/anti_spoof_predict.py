@@ -1,29 +1,13 @@
 # -*- coding: utf-8 -*-
-# @Time : 20-6-9 上午10:20
-# @Author : zhuying
-# @Company : Minivision
-# @File : anti_spoof_predict.py
-# @Software : PyCharm
 
 import os
 import cv2
 import math
-import torch
 import numpy as np
-import torch.nn.functional as F
+import onnxruntime as ort
 
-
-from src.model_lib.MiniFASNet import MiniFASNetV1, MiniFASNetV2,MiniFASNetV1SE,MiniFASNetV2SE
 from src.data_io import transform as trans
-from src.utility import get_kernel, parse_model_name
-
-MODEL_MAPPING = {
-    'MiniFASNetV1': MiniFASNetV1,
-    'MiniFASNetV2': MiniFASNetV2,
-    'MiniFASNetV1SE':MiniFASNetV1SE,
-    'MiniFASNetV2SE':MiniFASNetV2SE
-}
-
+from src.utility import parse_model_name
 
 class Detection:
     def __init__(self):
@@ -60,55 +44,35 @@ class Detection:
                     bboxes.append([int(left), int(top), w, h])
         return bboxes
 
-
 class AntiSpoofPredict(Detection):
-    def __init__(self, device_id):
+    def __init__(self, device_id=0):
         super(AntiSpoofPredict, self).__init__()
-        self.device = torch.device("cuda:{}".format(device_id)
-                                   if torch.cuda.is_available() else "cpu")
+        self.providers = ['CPUExecutionProvider']
+        self.sessions = {}
 
     def _load_model(self, model_path):
-        # define model
-        model_name = os.path.basename(model_path)
-        h_input, w_input, model_type, _ = parse_model_name(model_name)
-        self.kernel_size = get_kernel(h_input, w_input,)
-        self.model = MODEL_MAPPING[model_type](conv6_kernel=self.kernel_size).to(self.device)
-
-        # load model weight
-        state_dict = torch.load(model_path, map_location=self.device)
-        keys = iter(state_dict)
-        first_layer_name = keys.__next__()
-        if first_layer_name.find('module.') >= 0:
-            from collections import OrderedDict
-            new_state_dict = OrderedDict()
-            for key, value in state_dict.items():
-                name_key = key[7:]
-                new_state_dict[name_key] = value
-            self.model.load_state_dict(new_state_dict)
-        else:
-            self.model.load_state_dict(state_dict)
-        return None
+        if model_path not in self.sessions:
+            sess_options = ort.SessionOptions()
+            # CPU performance tuning
+            sess_options.intra_op_num_threads = 2
+            sess_options.inter_op_num_threads = 2
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            self.sessions[model_path] = ort.InferenceSession(model_path, sess_options, providers=self.providers)
+        return self.sessions[model_path]
 
     def predict(self, img, model_path):
         test_transform = trans.Compose([
             trans.ToTensor(),
         ])
         img = test_transform(img)
-        img = img.unsqueeze(0).to(self.device)
-        self._load_model(model_path)
-        self.model.eval()
-        with torch.no_grad():
-            result = self.model.forward(img)
-            result = F.softmax(result).cpu().numpy()
-        return result
-
-
-
-
-
-
-
-
-
-
-
+        img_np = img.unsqueeze(0).numpy()
+        
+        session = self._load_model(model_path)
+        input_name = session.get_inputs()[0].name
+        output_name = session.get_outputs()[0].name
+        
+        result = session.run([output_name], {input_name: img_np})[0]
+        
+        exp_result = np.exp(result - np.max(result))
+        softmax_result = exp_result / exp_result.sum(axis=1, keepdims=True)
+        return softmax_result
