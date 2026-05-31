@@ -1,0 +1,10 @@
+easydict
+numpy
+tqdm
+torchvision
+torch
+opencv-python
+Pillow
+fastapi
+uvicorn
+python-multipart
