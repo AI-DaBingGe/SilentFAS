@@ -43,6 +43,9 @@ python main.py --port 8000
 **接口地址**：`POST /api/v1/liveness`
 
 **请求参数** (格式: `application/json`)：
+请求头 (Headers):
+- `X-API-Key: sf_live_platform_A_12345`
+
 ```json
 {
   "image_base64": "图片的Base64编码字符串..."

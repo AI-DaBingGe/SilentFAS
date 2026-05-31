@@ -3,6 +3,32 @@ import base64
 import time
 
 URL = "http://127.0.0.1:8000/api/v1/liveness"
+HEADERS = {"X-API-Key": "sf_live_platform_A_12345"}
+
+def test_auth(image_path):
+    print(f"\n--- Testing Authentication ---")
+    try:
+        with open(image_path, 'rb') as f:
+            base64_data = base64.b64encode(f.read()).decode('utf-8')
+    except Exception as e:
+        return False
+        
+    payload = {"image_base64": base64_data}
+    
+    # 1. No Header
+    response1 = requests.post(URL, json=payload)
+    if response1.status_code != 401:
+        print(f"Auth Test Failed: Expected 401 for no header, got {response1.status_code}")
+        return False
+        
+    # 2. Invalid Header
+    response2 = requests.post(URL, json=payload, headers={"X-API-Key": "invalid_key"})
+    if response2.status_code != 401:
+        print(f"Auth Test Failed: Expected 401 for invalid header, got {response2.status_code}")
+        return False
+        
+    print("Authentication Tests PASSED.")
+    return True
 
 def test_image(image_path, expected_real):
     print(f"\n--- Testing {image_path} ---")
@@ -15,7 +41,7 @@ def test_image(image_path, expected_real):
         
     payload = {"image_base64": base64_data}
     try:
-        response = requests.post(URL, json=payload)
+        response = requests.post(URL, json=payload, headers=HEADERS)
         response.raise_for_status()
         data = response.json()
     except Exception as e:
@@ -52,6 +78,7 @@ if __name__ == "__main__":
     fake_img = "./sample_images/fake.png"
     
     all_passed = True
+    all_passed &= test_auth(real_img)
     all_passed &= test_image(real_img, expected_real=True)
     all_passed &= test_image(fake_img, expected_real=False)
     

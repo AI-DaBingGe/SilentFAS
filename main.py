@@ -3,7 +3,8 @@ import cv2
 import numpy as np
 import time
 import base64
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, status
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 import uvicorn
 
@@ -12,6 +13,25 @@ from src.generate_patches import CropImage
 from src.utility import parse_model_name
 
 app = FastAPI(title="Silent Face Anti-Spoofing API", description="单目静默活体检测服务", version="1.0.0")
+
+# --- Security: API Key Authorization ---
+API_KEY_NAME = "X-API-Key"
+api_key_header_auth = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+# 默认白名单 Token 配置字典 (未来可扩展为查询 Redis 或 MySQL)
+VALID_API_KEYS = {
+    "sf_live_platform_A_12345": "合作平台 A",
+    "sf_live_platform_B_67890": "合作平台 B"
+}
+
+async def get_api_key(api_key: str = Security(api_key_header_auth)):
+    if api_key in VALID_API_KEYS:
+        return api_key
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无效或缺失的 API Key 授权 (X-API-Key)",
+    )
+# ---------------------------------------
 
 # Initialize models
 MODEL_DIR = "./resources/anti_spoof_models"
@@ -23,7 +43,7 @@ class LivenessRequest(BaseModel):
     image_base64: str
 
 @app.post("/api/v1/liveness")
-async def check_liveness(request: LivenessRequest):
+async def check_liveness(request: LivenessRequest, api_key: str = Security(get_api_key)):
     """
     接收单张图片的 Base64 编码，进行活体检测。
     返回 is_real (布尔值) 以及 score (概率得分)。

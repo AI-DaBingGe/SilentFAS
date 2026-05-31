@@ -43,6 +43,9 @@ python main.py --port 8000
 **POST** `/api/v1/liveness`
 
 **Request Body** (`application/json`):
+Headers:
+- `X-API-Key: sf_live_platform_A_12345`
+
 ```json
 {
   "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAE..."
