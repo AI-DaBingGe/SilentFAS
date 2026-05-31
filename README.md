@@ -32,16 +32,21 @@ python main.py
 
 ### `POST /api/v1/liveness`
 
-**请求参数 (multipart/form-data):**
-- `file`: 待检测的图片文件 (支持 jpg/png)
+**请求参数 (application/json):**
+- `image_base64`: 待检测的图片 Base64 编码字符串（支持带有或不带 `data:image/jpeg;base64,` 头部）。
 
 **Python 请求示例:**
 ```python
 import requests
+import base64
+
+# 读取图片并转为 base64
+with open('./images/sample/image_T1.jpg', 'rb') as f:
+    base64_data = base64.b64encode(f.read()).decode('utf-8')
 
 url = "http://127.0.0.1:8000/api/v1/liveness"
-files = {'file': open('./images/sample/image_T1.jpg', 'rb')}
-response = requests.post(url, files=files)
+payload = {"image_base64": base64_data}
+response = requests.post(url, json=payload)
 print(response.json())
 ```
 

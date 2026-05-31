@@ -2,7 +2,9 @@ import os
 import cv2
 import numpy as np
 import time
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import base64
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import uvicorn
 
 from src.anti_spoof_predict import AntiSpoofPredict
@@ -17,21 +19,30 @@ device_id = 0
 model_test = AntiSpoofPredict(device_id)
 image_cropper = CropImage()
 
+class LivenessRequest(BaseModel):
+    image_base64: str
+
 @app.post("/api/v1/liveness")
-async def check_liveness(file: UploadFile = File(...)):
+async def check_liveness(request: LivenessRequest):
     """
-    接收单张图片，进行活体检测。
+    接收单张图片的 Base64 编码，进行活体检测。
     返回 is_real (布尔值) 以及 score (概率得分)。
     """
-    if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-        raise HTTPException(status_code=400, detail="只支持 PNG 和 JPG 格式的图片。")
-
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
-    if image is None:
-        raise HTTPException(status_code=400, detail="无法解析图片，请检查图片是否损坏。")
+    try:
+        base64_data = request.image_base64
+        # 如果包含头部信息 (如 data:image/jpeg;base64,)，将其剔除
+        if ',' in base64_data:
+            base64_data = base64_data.split(',')[1]
+        
+        image_data = base64.b64decode(base64_data)
+        nparr = np.frombuffer(image_data, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            raise HTTPException(status_code=400, detail="无法解析图片，请检查 Base64 编码是否有效。")
+            
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Base64 解码或图片读取失败: {str(e)}")
 
     try:
         # Detect Face
