@@ -32,7 +32,7 @@ class Detection:
         self.detector = cv2.dnn.readNetFromCaffe(deploy, caffemodel)
         self.detector_confidence = 0.6
 
-    def get_bbox(self, img):
+    def get_bboxes(self, img):
         height, width = img.shape[0], img.shape[1]
         aspect_ratio = width / height
         if img.shape[1] * img.shape[0] >= 192 * 192:
@@ -43,11 +43,22 @@ class Detection:
         blob = cv2.dnn.blobFromImage(img, 1, mean=(104, 117, 123))
         self.detector.setInput(blob, 'data')
         out = self.detector.forward('detection_out').squeeze()
-        max_conf_index = np.argmax(out[:, 2])
-        left, top, right, bottom = out[max_conf_index, 3]*width, out[max_conf_index, 4]*height, \
-                                   out[max_conf_index, 5]*width, out[max_conf_index, 6]*height
-        bbox = [int(left), int(top), int(right-left+1), int(bottom-top+1)]
-        return bbox
+        
+        bboxes = []
+        if len(out.shape) == 1 and out.shape[0] == 7:
+            out = np.expand_dims(out, axis=0)
+        elif len(out.shape) == 0 or out.shape[0] == 0:
+            return bboxes
+            
+        for i in range(out.shape[0]):
+            conf = out[i, 2]
+            if conf > self.detector_confidence:
+                left, top, right, bottom = out[i, 3]*width, out[i, 4]*height, \
+                                           out[i, 5]*width, out[i, 6]*height
+                w, h = int(right-left+1), int(bottom-top+1)
+                if w > 0 and h > 0:
+                    bboxes.append([int(left), int(top), w, h])
+        return bboxes
 
 
 class AntiSpoofPredict(Detection):

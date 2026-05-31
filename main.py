@@ -46,47 +46,54 @@ async def check_liveness(request: LivenessRequest):
 
     try:
         # Detect Face
-        image_bbox = model_test.get_bbox(image)
-        if image_bbox is None or len(image_bbox) < 4 or image_bbox[2] == 0 or image_bbox[3] == 0:
-            return {"code": 400, "msg": "未检测到人脸，请提供清晰的人脸照片。", "data": None}
+        image_bboxes = model_test.get_bboxes(image)
+        if image_bboxes is None or len(image_bboxes) == 0:
+            return {"code": 400, "msg": "未检测到人脸，请提供清晰的人脸照片。", "data": {"faces": []}}
             
-        prediction = np.zeros((1, 3))
-        test_speed = 0
+        faces_result = []
+        total_test_speed = 0
         
-        # 遍历所有模型进行 Ensemble(集成推理)
-        for model_name in os.listdir(MODEL_DIR):
-            h_input, w_input, model_type, scale = parse_model_name(model_name)
-            param = {
-                "org_img": image,
-                "bbox": image_bbox,
-                "scale": scale,
-                "out_w": w_input,
-                "out_h": h_input,
-                "crop": True,
-            }
-            if scale is None:
-                param["crop"] = False
-            img = image_cropper.crop(**param)
-            start = time.time()
-            prediction += model_test.predict(img, os.path.join(MODEL_DIR, model_name))
-            test_speed += time.time() - start
+        for image_bbox in image_bboxes:
+            prediction = np.zeros((1, 3))
+            
+            # 遍历所有模型进行 Ensemble(集成推理)
+            for model_name in os.listdir(MODEL_DIR):
+                h_input, w_input, model_type, scale = parse_model_name(model_name)
+                param = {
+                    "org_img": image,
+                    "bbox": image_bbox,
+                    "scale": scale,
+                    "out_w": w_input,
+                    "out_h": h_input,
+                    "crop": True,
+                }
+                if scale is None:
+                    param["crop"] = False
+                img = image_cropper.crop(**param)
+                start = time.time()
+                prediction += model_test.predict(img, os.path.join(MODEL_DIR, model_name))
+                total_test_speed += time.time() - start
 
-        # 预测结果: 0 和 2 代表 Fake（不同维度的攻击如纸张翻拍或屏幕翻拍），1 代表 Real
-        label = np.argmax(prediction)
-        # 因为有2个模型（默认为2个模型进行ensemble），所以 / 2 取平均置信度
-        num_models = len(os.listdir(MODEL_DIR))
-        value = prediction[0][label] / num_models 
-        
-        is_real = True if label == 1 else False
+            # 预测结果: 0 和 2 代表 Fake（不同维度的攻击如纸张翻拍或屏幕翻拍），1 代表 Real
+            label = np.argmax(prediction)
+            # 因为有多个模型进行ensemble，所以 / num_models 取平均置信度
+            num_models = len(os.listdir(MODEL_DIR))
+            value = prediction[0][label] / num_models 
+            
+            is_real = True if label == 1 else False
+            
+            faces_result.append({
+                "is_real": is_real,
+                "score": float(value),
+                "box": image_bbox
+            })
         
         return {
             "code": 200,
             "msg": "success",
             "data": {
-                "is_real": is_real,
-                "score": float(value),
-                "box": image_bbox,
-                "cost_time_sec": round(test_speed, 4)
+                "faces": faces_result,
+                "cost_time_sec": round(total_test_speed, 4)
             }
         }
         
