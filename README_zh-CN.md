@@ -81,5 +81,17 @@ python test_api.py
 - **防伪推理核心**：MiniFASNet (V1SE 与 V2 双模型集成，ONNX Runtime 加速)
 - **Web 服务层**：FastAPI + Uvicorn
 
+## 架构扩展：CPU vs GPU 部署指南
+
+本项目当前架构（ONNX Runtime CPU 引擎 + Nginx 多进程负载均衡）是专为 **纯 CPU 服务器** 打造的终极高并发方案，能充分压榨多核算力。
+
+**如果想使用 GPU 加速：**
+代码兼容性极高，只需极小改动即可支持 Nvidia GPU：
+1. 安装依赖：`pip install onnxruntime-gpu`
+2. 修改 `src/anti_spoof_predict.py`，将 `['CPUExecutionProvider']` 替换为 `['CUDAExecutionProvider']`。单脸推理时间将下降至毫秒级。
+
+**生产环境 GPU 极高并发建议：**
+虽然本架构可无缝切换至 GPU，但如果您的目标是利用 A100/T4 等高端显卡实现 5000+ QPS 的极致并发，传统的 `Nginx + FastAPI` 处理单张图片（Batch Size = 1）会造成算力浪费。对于真正的工业级 GPU 集群，推荐基于本项目的 ONNX 模型，改用 **Nvidia Triton Inference Server** 结合**动态批处理 (Dynamic Batching)** 技术，打包矩阵并发推理，以获得数十倍的吞吐量跃升。
+
 ## 协议
 MIT License
