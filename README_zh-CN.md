@@ -27,8 +27,42 @@ SilentFAS 是一款极速、高精度的单目静默活体检测服务。它仅�
    ```
 2. 安装环境依赖:
    ```bash
-   pip install -r requirements.txt
+   # 强烈建议在国内服务器环境先单独安装纯 CPU 版的 PyTorch，极大地提高安装速度并减小体积：
+   python -m pip install torch torchvision --index-url https://mirror.nju.edu.cn/pytorch/whl/cpu --extra-index-url https://mirrors.aliyun.com/pypi/simple/
+
+   # 然后再安装其余依赖：
+   pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
    ```
+   
+## CentOS 7 部署避坑指南 (必看)
+
+如果您在较老的 Linux 系统（如 CentOS 7 / Ubuntu 18.04 以下，即 GLIBC < 2.28）上部署本项目，可能会遇到以下两个经典报错，请按说明解决：
+
+### 1. 报错 `numpy.core.multiarray failed to import`
+**原因**：默认安装了最新的 NumPy 2.x，导致与旧版编译的 OpenCV / ONNXRuntime 产生底层 C API 冲突。
+**解决**：强制降级 NumPy 到 1.x 版本。
+```bash
+python -m pip install "numpy<2.0.0" -i https://mirrors.aliyun.com/pypi/simple/
+```
+
+### 2. 报错 `Unsupported model IR version: 10, max supported IR version: 9`
+**原因**：从 ONNXRuntime `1.17.0` 开始，官方已完全放弃对 CentOS 7 (GLIBC 2.17) 的支持。`pip` 在老系统上最高只能为您安装 `1.16.3` 版本，但该版本最高只支持 IR 版本 9 的模型，而项目自带的模型是 IR 版本 10。
+**解决**：无需折腾升级系统，直接运行以下 Python 代码，强行将 ONNX 模型的 IR 版本降级为 9，老版本引擎即可完美读取！
+
+```bash
+python -c '\''
+import onnx
+import glob
+print("正在扫描并降级模型版本...")
+for p in glob.glob("./resources/anti_spoof_models/*.onnx"):
+    m = onnx.load(p)
+    if m.ir_version > 9:
+        print(f"成功将 {p} 从 IR v{m.ir_version} 降级为 9")
+        m.ir_version = 9
+        onnx.save(m, p)
+print("模型全批降级完成！")
+'\''
+```
 
 ## 使用说明
 

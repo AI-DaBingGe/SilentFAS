@@ -11,6 +11,7 @@ import uvicorn
 from src.anti_spoof_predict import AntiSpoofPredict
 from src.generate_patches import CropImage
 from src.utility import parse_model_name
+from src.image_enhance import check_face_quality, adaptive_gamma_correction, detect_moire_fft
 
 app = FastAPI(title="Silent Face Anti-Spoofing API", description="单目静默活体检测服务", version="1.0.0")
 
@@ -76,6 +77,9 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
         for image_bbox in image_bboxes:
             prediction = np.zeros((1, 3))
             
+            checked_quality = False
+            brightness = 255.0
+            
             # 遍历所有模型进行 Ensemble(集成推理)
             for model_name in os.listdir(MODEL_DIR):
                 if not model_name.endswith('.onnx'):
@@ -92,19 +96,48 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                 if scale is None:
                     param["crop"] = False
                 img = image_cropper.crop(**param)
+                
+                # --- 多维交叉验证预处理 ---
+                if not checked_quality:
+                    brightness = check_face_quality(img)
+                    checked_quality = True
+                
+                img = adaptive_gamma_correction(img, brightness)
+                # --------------------------
+                
                 start = time.time()
                 prediction += model_test.predict(img, os.path.join(MODEL_DIR, model_name))
                 total_test_speed += time.time() - start
 
-            # 预测结果: 0 和 2 代表 Fake（不同维度的攻击如纸张翻拍或屏幕翻拍），1 代表 Real
-            label = np.argmax(prediction)
-            # 因为有多个模型进行ensemble，所以 / num_models 取平均置信度
+            # 预测结果处理
             num_models = len([m for m in os.listdir(MODEL_DIR) if m.endswith('.onnx')])
             if num_models == 0:
                 raise Exception("未找到 ONNX 模型，请确保预训练模型已成功转换。")
-            value = prediction[0][label] / num_models 
+                
+            real_score = prediction[0][1] / num_models
+            fake_paper_score = prediction[0][0] / num_models
+            fake_screen_score = prediction[0][2] / num_models
             
-            is_real = True if label == 1 else False
+            # 多维综合判定逻辑
+            if real_score > 0.85:
+                is_real = True
+            elif real_score > 0.3:
+                # 处于模糊地带，使用物理摩尔纹检测作为第二防线（使用当前裁剪图即可）
+                has_moire = detect_moire_fft(img)
+                if has_moire:
+                    is_real = False
+                    real_score = min(real_score, 0.4) # 惩罚得分，防止混淆
+                else:
+                    # 如果不是极暗环境或者摩尔纹不明显，可以相信模型倾向
+                    is_real = True if real_score > 0.5 else False
+            else:
+                is_real = False
+                
+            # 若屏幕翻拍概率直接过半，强行拦截
+            if fake_screen_score > 0.5:
+                is_real = False
+                
+            value = real_score
             
             faces_result.append({
                 "is_real": is_real,
