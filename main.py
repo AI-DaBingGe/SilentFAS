@@ -145,7 +145,7 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                 "box": image_bbox
             })
         
-        return {
+        response_data = {
             "code": 200,
             "msg": "success",
             "data": {
@@ -153,6 +153,8 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                 "cost_time_sec": round(total_test_speed, 4)
             }
         }
+        print(f"INFO:     [Response Data] {response_data}", flush=True)
+        return response_data
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"推理发生内部错误: {str(e)}")
