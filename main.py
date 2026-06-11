@@ -59,6 +59,10 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
+        # --- 全局对比度增强：在裁剪和检测之前进行大图增强，还原立体感 ---
+        image = apply_clahe_contrast(image)
+        # -----------------------------------------------------------
+        
         if image is None:
             raise HTTPException(status_code=400, detail="无法解析图片，请检查 Base64 编码是否有效。")
             
@@ -103,9 +107,6 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                     checked_quality = True
                 
                 img = adaptive_gamma_correction(img, brightness)
-                
-                # --- 新增: CLAHE 对比度强光立体感还原 ---
-                img = apply_clahe_contrast(img)
                 # --------------------------
                 
                 start = time.time()
