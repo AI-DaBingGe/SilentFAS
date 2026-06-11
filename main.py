@@ -59,12 +59,12 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
         nparr = np.frombuffer(image_data, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
+        if image is None:
+            raise HTTPException(status_code=400, detail="无法解析图片，请检查 Base64 编码是否有效。")
+            
         # --- 全局对比度增强：在裁剪和检测之前进行大图增强，还原立体感 ---
         image = apply_clahe_contrast(image)
         # -----------------------------------------------------------
-        
-        if image is None:
-            raise HTTPException(status_code=400, detail="无法解析图片，请检查 Base64 编码是否有效。")
             
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Base64 解码或图片读取失败: {str(e)}")
@@ -161,6 +161,8 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
         return response_data
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"推理发生内部错误: {str(e)}")
 
 if __name__ == "__main__":
