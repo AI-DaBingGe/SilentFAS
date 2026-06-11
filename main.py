@@ -122,24 +122,23 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
             fake_paper_score = prediction[0][0] / num_models
             fake_screen_score = prediction[0][2] / num_models
             
-            # 物理摩尔纹检测作为核心安全底线（使用当前裁剪图即可）
-            has_moire = detect_moire_fft(img)
-            
             # 多维综合判定逻辑
-            is_real = False
-            
             if real_score > 0.85:
                 is_real = True
-            elif real_score > 0.15: # 降低基础门槛以容纳强反光/高曝光
+            elif real_score > 0.3:
+                # 处于模糊地带，使用物理摩尔纹检测作为第二防线（使用当前裁剪图即可）
+                has_moire = detect_moire_fft(img)
                 if has_moire:
-                    # 如果检测到屏幕物理网格，直接拦截
                     is_real = False
-                    real_score = min(real_score, 0.4) # 惩罚得分
+                    real_score = min(real_score, 0.4) # 惩罚得分，防止混淆
                 else:
-                    # 没有摩尔纹的前提下，放宽对眼镜反光和纸张平滑纹理的容忍度
-                    if fake_screen_score < 0.85 and fake_paper_score < 0.80:
-                        is_real = True
+                    # 如果不是极暗环境或者摩尔纹不明显，可以相信模型倾向
+                    is_real = True if real_score > 0.5 else False
             else:
+                is_real = False
+                
+            # 若屏幕翻拍概率直接过半，强行拦截
+            if fake_screen_score > 0.5:
                 is_real = False
                 
             value = real_score
