@@ -11,7 +11,7 @@ import uvicorn
 from src.anti_spoof_predict import AntiSpoofPredict
 from src.generate_patches import CropImage
 from src.utility import parse_model_name
-from src.image_enhance import check_face_quality, adaptive_gamma_correction, detect_moire_fft
+from src.image_enhance import check_face_quality, adaptive_gamma_correction, detect_moire_fft, apply_clahe_contrast
 
 app = FastAPI(title="Silent Face Anti-Spoofing API", description="单目静默活体检测服务", version="1.0.0")
 
@@ -103,6 +103,9 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                     checked_quality = True
                 
                 img = adaptive_gamma_correction(img, brightness)
+                
+                # --- 新增: CLAHE 对比度强光立体感还原 ---
+                img = apply_clahe_contrast(img)
                 # --------------------------
                 
                 start = time.time()

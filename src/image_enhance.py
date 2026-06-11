@@ -27,6 +27,18 @@ def adaptive_gamma_correction(face_img, brightness, threshold=80, gamma=1.8):
         return cv2.LUT(face_img, table)
     return face_img
 
+def apply_clahe_contrast(face_img):
+    """
+    使用 CLAHE (限制对比度自适应直方图均衡化) 增强图像立体感和对比度
+    这对非常扁平的假脸或劣质摄像头图像有极大的“立体感还原”效果。
+    """
+    lab = cv2.cvtColor(face_img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl,a,b))
+    return cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+
 def detect_moire_fft(face_img):
     """
     使用傅里叶变换检测高频摩尔纹。
