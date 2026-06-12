@@ -77,7 +77,7 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
         total_test_speed = 0
         
         for image_bbox in image_bboxes:
-            prediction = np.zeros((1, 3))
+            predictions = []
             
             checked_quality = False
             brightness = 255.0
@@ -108,17 +108,18 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                 # --------------------------
                 
                 start = time.time()
-                prediction += model_test.predict(img, os.path.join(MODEL_DIR, model_name))
+                pred = model_test.predict(img, os.path.join(MODEL_DIR, model_name))
+                predictions.append(pred)
                 total_test_speed += time.time() - start
 
             # 预测结果处理
-            num_models = len([m for m in os.listdir(MODEL_DIR) if m.endswith('.onnx')])
-            if num_models == 0:
+            if len(predictions) == 0:
                 raise Exception("未找到 ONNX 模型，请确保预训练模型已成功转换。")
                 
-            real_score = prediction[0][1] / num_models
-            fake_paper_score = prediction[0][0] / num_models
-            fake_screen_score = prediction[0][2] / num_models
+            # 采用“多尺度上下文融合”，提取最乐观判断以包容局部瑕疵
+            real_score = float(max(p[0][1] for p in predictions))
+            fake_paper_score = float(min(p[0][0] for p in predictions))
+            fake_screen_score = float(min(p[0][2] for p in predictions))
             
             # 多维综合判定逻辑
             if real_score > 0.85:
