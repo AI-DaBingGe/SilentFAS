@@ -131,8 +131,8 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
                     is_real = False
                     real_score = min(real_score, 0.4) # 惩罚得分，防止混淆
                 else:
-                    # 如果不是极暗环境或者摩尔纹不明显，可以相信模型倾向
-                    is_real = True if real_score > 0.5 else False
+                    # 适当放宽模糊地带的真人判定阈值（从0.5降至0.45）以包容极度雾霾/平光的照片
+                    is_real = True if real_score > 0.45 else False
             else:
                 is_real = False
                 
