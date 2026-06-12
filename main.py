@@ -62,9 +62,7 @@ async def check_liveness(request: LivenessRequest, api_key: str = Security(get_a
         if image is None:
             raise HTTPException(status_code=400, detail="无法解析图片，请检查 Base64 编码是否有效。")
             
-        # --- 全局对比度增强：在裁剪和检测之前进行大图增强，还原立体感 ---
-        image = apply_clahe_contrast(image)
-        # -----------------------------------------------------------
+        # --------------------------------------------------------
             
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Base64 解码或图片读取失败: {str(e)}")
